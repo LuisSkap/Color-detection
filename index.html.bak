@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>DeteccionColor</title>
+</head>
+
+<body>
+	<canvas id="canvas"></canvas>
+	<canvas id="resultado"></canvas>
+	
+	<script type="text/javascript" src="Led.js"></script>
+	<script type="text/javascript">
+	
+		var image = new Image();
+		image.onload = imageLoaded;
+		image.src = "circulos1.jpg";
+		
+		var Lrojo = {r: 255, g: 0, b: 0, a: 255};
+		var Lverde = {r: 0, g: 255, b: 0, a: 255};
+		var Lazul = {r: 0, g: 0, b: 255, a: 255};
+		
+		var DistanciaAceptable = 100;
+		
+		
+		function imageLoaded() {
+			var canvas = document.getElementById("canvas");
+			var ctx = canvas.getContext("2d");
+			
+			canvas.width = image.width;
+			canvas.height = image.height;
+			
+			ctx.drawImage(image, 0, 0, image.width, image.height);
+			
+			DeteccionColor(Lrojo);
+			
+			setTimeout(() => {
+			  DeteccionColor(Lverde)
+			}, 1000);
+			//DeteccionColor(Lverde);
+		}
+		
+		function DeteccionColor(pick)  {
+
+			var ctx = canvas.getContext("2d");
+			
+			canvas.width = image.width;
+			canvas.height = image.height;
+			
+			ctx.drawImage(image, 0, 0, image.width, image.height, 0, 0, canvas.width, canvas.height);
+			
+			var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+			var pixeles = imgData.data;
+			
+			console.log(pick);
+			
+			//var pixelmasAmarillo = null;
+			//var menorDistancia = null;
+			
+			var leds = [];
+			
+			for (var p=0; p < pixeles.length; p += 4)  {
+				var rojo = pixeles[p];
+				var verde = pixeles[p+1];
+				var azul = pixeles[p+2];
+				var alpha = pixeles[p+3];
+				
+				var distancia = Math.sqrt(
+					Math.pow(pick.r - rojo, 2) + 
+					Math.pow(pick.g - verde, 2) + 
+					Math.pow(pick.b - azul, 2)
+				);
+				
+				if (distancia < DistanciaAceptable)  {
+				
+					/*console.log("findpixel");
+					console.log(pixeles[p]);
+					console.log(pixeles[p+1]);
+					console.log(pixeles[p+2]);
+
+					pixeles[p] = 0;
+					pixeles[p+1] = 0;
+					pixeles[p+2] = 255;*/
+					
+					var y = Math.floor(p / 4 / canvas.width);
+					var x = (p/4) % canvas.width;
+					
+					if(leds.length == 0)  {
+						//primer led
+						var led = new Led(x, y);
+						leds.push(led);
+					}else  {
+					
+						var encontrado = false;
+						for(var pl = 0; pl < leds.length; pl++)  {
+							if(leds[pl].estaCerca(x, y))  {
+								leds[pl].agregarpixel(x, y);
+								encontrado = true;
+								break;
+							}
+						}
+
+						if(!encontrado)  {
+						
+							var ledss = new Led(x, y);
+							leds.push(ledss);
+						}
+					}
+				}
+				
+				/*if (menorDistancia == null || distancia < menorDistancia)   {
+				
+					menorDistancia = distancia;
+					
+					var y = Math.floor(p / 4 / canvas.width);
+					var x = (p/4) % canvas.width;
+					
+					pixelmasAmarillo = {x: x, y: y};
+					
+					console.log(pixelmasAmarillo);
+				}*/
+			}
+			
+			ctx.putImageData(imgData, 0, 0);
+			
+			leds = unirleds(leds);
+			
+			
+			for(var pl = 0; pl < leds.length; pl++)  {
+			
+				var width = leds[pl].xMaxima - leds[pl].xMinima;
+				var height = leds[pl].yMaxima - leds[pl].yMinima;
+				
+				var area = width * height;
+				
+				if (area > 150)  {
+				
+					leds[pl].dibujar(ctx);
+				}
+				
+			}
+			
+			console.log(leds.length);
+			
+			/*if (pixelmasAmarillo != null)  {
+			
+				ctx.fillStyle="#00f";
+				ctx.beginPath();
+				ctx.arc(pixelmasAmarillo.x, pixelmasAmarillo.y, 10, 0, 2*Math.PI);
+				ctx.fill();
+			}*/
+			
+		}
+		
+		function unirleds(leds) {
+			var salir = false;
+
+			//Comparamos todos contra todos
+			for (var p1=0; p1 < leds.length; p1++)  {
+				for (var p2=0; p2 < leds.length; p2++) {
+
+					if (p1 == p2) continue; //Si es el mismo, no lo consideres, y ya
+
+					var led1 = leds[p1];
+					var led2 = leds[p2];
+
+					//Intersectan?
+					var intersectan = led1.xMinima < led2.xMaxima &&
+						led1.xMaxima > led2.xMinima &&
+						led1.yMinima < led2.yMaxima && 
+						led1.yMaxima > led2.yMinima;
+
+					if (intersectan) {
+						//Sip... pasar los pixeles del p2 al p1
+						for (var p=0; p < led2.pixeles.length; p++) {
+							led1.agregarpixel(
+								led2.pixeles[p].x,
+								led2.pixeles[p].y
+							);
+						}
+						//borrar el p2
+						leds.splice(p2, 1);
+						salir = true;
+						break;
+					}
+
+				}
+
+				if (salir) {
+					break;
+				}
+			}
+
+			//Si encontre una interseccion, reprocesemos todo de nuevo
+			//con el arreglo modificado
+			if (salir) {
+				return unirleds(leds);
+			} else {
+				//Ya no hubo intersecciones, salir
+				return leds;
+			}
+		}
+		
+		</script>
+
+</body>
+</html>
